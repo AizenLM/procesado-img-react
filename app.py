@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory 
 from werkzeug.utils import secure_filename
 import numpy as np
 import cv2  # Usado para manipular imágenes
@@ -21,6 +21,28 @@ PROCESSED_FOLDER = 'processed'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
+
+def procesar_morfologia(imagen_binaria, filename):
+    # Definir el kernel para las operaciones morfológicas
+    kernel = np.ones((5, 5), np.uint8)
+
+    # Apertura morfológica (eliminar ruido)
+    apertura = cv2.morphologyEx(imagen_binaria, cv2.MORPH_OPEN, kernel)
+    apertura_path = os.path.join(PROCESSED_FOLDER, f'opened_{filename}.png')
+    cv2.imwrite(apertura_path, apertura * 255)  # Guardar la imagen
+
+    # Cierre morfológico (cerrar pequeñas aperturas)
+    cierre = cv2.morphologyEx(imagen_binaria, cv2.MORPH_CLOSE, kernel)
+    cierre_path = os.path.join(PROCESSED_FOLDER, f'closed_{filename}.png')
+    cv2.imwrite(cierre_path, cierre * 255)  # Guardar la imagen
+
+    # Etiquetado de las regiones conectadas
+    num_labels, labels_im = cv2.connectedComponents(imagen_binaria)
+    labeled_path = os.path.join(PROCESSED_FOLDER, f'labeled_{filename}.png')
+    labels_normalized = (labels_im / num_labels) * 255
+    cv2.imwrite(labeled_path, labels_normalized.astype(np.uint8))  # Guardar la imagen
+
+    return apertura_path, cierre_path, labeled_path
 # Función para detectar regiones usando conectividad de 4 vecinos
 def detectar_regiones(imagen):
     filas, columnas = imagen.shape
@@ -126,11 +148,17 @@ def create_compound_image(image, overlap):
     compound_image_path = os.path.join(PROCESSED_FOLDER, 'compound_quadbits.png')
     Image.fromarray(compound_image).save(compound_image_path)
     return compound_image_path
+#funcion para mostra imagen coloreada
+
 
 # Ruta para subir y procesar la imagen
 @app.route('/procesar_imagen', methods=['POST'])
 def procesar_imagen_endpoint():
     try:
+        # Verificar si el archivo de imagen está presente
+        if 'imagen' not in request.files:
+            return jsonify({"error": "No se encontró la imagen en la solicitud"}), 400
+        
         file = request.files['imagen']
         print(f"Archivo recibido: {file.filename}")
 
@@ -146,9 +174,12 @@ def procesar_imagen_endpoint():
             print("Error: la imagen no se pudo leer.")
             return jsonify({"error": "La imagen no se pudo leer."}), 400
 
+        # Binarización de la imagen
         _, imagen_binaria = cv2.threshold(imagen, 128, 1, cv2.THRESH_BINARY)
+        binary_path = os.path.join(PROCESSED_FOLDER, f'binary_{filename}.png')
+        cv2.imwrite(binary_path, imagen_binaria * 255)  # Guardar imagen binarizada
 
-        # Procesar la imagen (con o sin traslape)
+        # Procesar la imagen (con o sin traslape) para obtener las regiones
         regiones = procesar_imagen(imagen_binaria, con_traslape)
         print(f"Regiones procesadas: {len(regiones)}")
 
@@ -156,15 +187,36 @@ def procesar_imagen_endpoint():
         histogram_path = save_histogram(imagen, filename)
         print(f"Histograma guardado en: {histogram_path}")
 
-        # Crear imagen compuesta de quadbits
-        compound_image_path = create_compound_image(imagen_binaria, con_traslape)
-        print(f"Imagen compuesta guardada en: {compound_image_path}")
+        # Realizar operaciones morfológicas y etiquetado
+        apertura_path, cierre_path, labeled_path = procesar_morfologia(imagen_binaria, filename)
 
         return jsonify({
             "regiones": regiones,
             "file_path": filepath,
-            "histogram_path": f'/processed/histogram_{filename}.png',  # URL corregida
-            "compound_image_path": '/processed/compound_quadbits.png'   # URL corregida
+            "histogram_path": f'/processed/histogram_{filename}.png',
+            "binary_image": {
+                "name": "Imagen binarizada",
+                "image_url": f'/processed/binary_{filename}.png',
+                "class": 'img'
+            },
+            "morphological_operations": [
+                {
+                    "name": "Apertura morfológica",
+                    "image_url": f'/processed/opened_{filename}.png',
+                    "class": 'img'
+                },
+                {
+                    "name": "Cierre morfológico",
+                    "image_url": f'/processed/closed_{filename}.png',
+                    "class": 'img'
+                },
+                {
+                    "name": "Imagen etiquetada",
+                    "image_url": f'/processed/labeled_{filename}.png',
+                    "class": 'img'
+                }
+            ],
+            "compound_image_path": '/processed/compound_quadbits.png'  # URL corregida
         })
 
     except Exception as e:

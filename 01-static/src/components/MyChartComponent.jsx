@@ -21,8 +21,14 @@ const MyChartComponent = () => {
   });
   const [selectedFile, setSelectedFile] = useState(null);
   const [conTraslape, setConTraslape] = useState(false);
+
+
+  //imgs
+  const [binaryImgUrl, setBinaryImgUrl] = useState('');
   const [histogramUrl, setHistogramUrl] = useState("");
   const [compoundImageUrl, setCompoundImageUrl] = useState("");
+  const [morphologicalOperation, setMorphologicalOperations] = useState([])
+
   const [loading, setLoading] = useState(false);
   const [isChartReady, setIsChartReady] = useState(false); // Nuevo estado
   const socket = useRef();
@@ -125,18 +131,28 @@ const MyChartComponent = () => {
           },
         }
       );
-      console.log(response.data.histogram_path);
       setHistogramUrl(`http://localhost:5000/${response.data.histogram_path}`);
+      setBinaryImgUrl(`http://localhost:5000/${response.data.binary_image.image_url}`)
+      const {morphological_operations} = response.data;
       setCompoundImageUrl(
         `http://localhost:5000/${response.data.compound_image_path}`
       );
 
+      setMorphologicalOperations(prevOperations => [
+        ...prevOperations,
+        ...morphological_operations.map(morphological => ({
+            name: morphological.name,
+            url: morphological.image_url
+        }))])
       const filePath = response.data.file_path;
       socket.current.emit("procesar_y_graficar", {
         file_path: filePath,
         con_traslape: conTraslape,
       });
       console.log("IMAGEN PROCESADA");
+      console.log(morphologicalOperation)
+
+
     } catch (error) {
       console.error("Error al procesar la imagen:", error);
       alert(
@@ -171,19 +187,32 @@ const MyChartComponent = () => {
 
       {/* Mostrar las imágenes solo cuando el gráfico esté listo */}
       {isChartReady ? (
-        <div>
+        <div className="content-imgs">
           {histogramUrl && (
+            <>
             <div>
               <h2>Histograma de la Imagen</h2>
               <img src={histogramUrl} alt="Histograma" />
             </div>
-          )}
-          {compoundImageUrl && (
+
             <div>
-              <h2>Imagen Compuesta (Quadbits)</h2>
-              <img src={compoundImageUrl} alt="Imagen Compuesta" />
+              <h2>Imagen Binaria</h2>
+              <img src={binaryImgUrl} alt="Imagen Binaria" />
             </div>
+            <h3>Operaciones Mofologicas</h3>
+            <h3>Operaciones Morfológicas</h3>
+            {morphologicalOperation.map(operation => (
+                <div key={operation.name}>
+                    <h4>{operation.name}</h4>
+                    <img src={`http://localhost:5000/${operation.url}`} alt={operation.name} />
+                </div>
+            ))}
+            </>
+        
+            
           )}
+       
+    
         </div>
       ) : (
         <div className="control-carga">Procesando la imagen 🦾 </div>
