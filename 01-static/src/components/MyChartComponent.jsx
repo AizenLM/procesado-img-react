@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Chart, registerables } from "chart.js";
 import io from "socket.io-client";
 import axios from "axios";
+import NewImages from "./NewImages";
 
 Chart.register(...registerables);
 
@@ -21,12 +22,14 @@ const MyChartComponent = () => {
   });
   const [selectedFile, setSelectedFile] = useState(null);
   const [conTraslape, setConTraslape] = useState(false);
-  const [numObjects,  setNumObjects] = useState('')
+  const [numObjects, setNumObjects] = useState("");
+  const [isVisibleImages, setIsVisibleImages] = useState(false);
 
   //imgs
-  const [binaryImgUrl, setBinaryImgUrl] = useState('');
+  const [binaryImgUrl, setBinaryImgUrl] = useState("");
   const [histogramUrl, setHistogramUrl] = useState("");
-  const [morphologicalOperation, setMorphologicalOperations] = useState([])
+  const [morphologicalOperation, setMorphologicalOperations] = useState([]);
+  const [isVisibleOnSubmit, setIsVisibleOnSubmit] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [isChartReady, setIsChartReady] = useState(false); // Nuevo estado
@@ -110,16 +113,20 @@ const MyChartComponent = () => {
   const handleFileChange = (e) => {
     setSelectedFile(e.target.files[0]);
   };
+  const displayNewImages = () => {
+    setIsVisibleImages(!isVisibleImages);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedFile) return;
-    setMorphologicalOperations([])
+    setMorphologicalOperations([]);
     setLoading(true);
+    setIsVisibleImages(false);
+    setIsVisibleOnSubmit(false);
     const formData = new FormData();
     formData.append("imagen", selectedFile);
     formData.append("con_traslape", String(conTraslape));
-
     try {
       const response = await axios.post(
         "http://localhost:5000/procesar_imagen",
@@ -131,25 +138,28 @@ const MyChartComponent = () => {
         }
       );
       setHistogramUrl(`http://localhost:5000/${response.data.histogram_path}`);
-      setBinaryImgUrl(`http://localhost:5000/${response.data.binary_image.image_url}`)
-      const {morphological_operations} = response.data;
-     
+      setBinaryImgUrl(
+        `http://localhost:5000/${response.data.binary_image.image_url}`
+      );
+      const { morphological_operations } = response.data;
+
       setNumObjects(response.data.regiones);
-      setMorphologicalOperations(prevOperations => [
+      setMorphologicalOperations((prevOperations) => [
         ...prevOperations,
-        ...morphological_operations.map(morphological => ({
-            name: morphological.name,
-            url: morphological.image_url
-        }))])
+        ...morphological_operations.map((morphological) => ({
+          name: morphological.name,
+          url: morphological.image_url,
+        })),
+      ]);
       const filePath = response.data.file_path;
       socket.current.emit("procesar_y_graficar", {
         file_path: filePath,
         con_traslape: conTraslape,
       });
       console.log("IMAGEN PROCESADA");
-      console.log(morphologicalOperation)
-
-
+      console.log(morphologicalOperation);
+      setIsVisibleOnSubmit(true);
+      setLoading(false);
     } catch (error) {
       console.error("Error al procesar la imagen:", error);
       alert(
@@ -158,56 +168,76 @@ const MyChartComponent = () => {
         }`
       );
     } finally {
-      setLoading(false);
+      
     }
   };
 
   return (
-    <div>
-      <h1>Procesar Imagen y Graficar Regiones</h1>
+    <div className="content">
       <form onSubmit={handleSubmit}>
-        <input type="file" onChange={handleFileChange} />
-        <label>
-          <input
-            type="checkbox"
-            checked={conTraslape}
-            onChange={() => setConTraslape(!conTraslape)}
-          />
-          Procesar con Traslape
-        </label>
-        <button type="submit">Subir y Procesar</button>
+        <div>
+          <input type="file" onChange={handleFileChange} />
+          <label>
+            <input
+              type="checkbox"
+              checked={conTraslape}
+              onChange={() => setConTraslape(!conTraslape)}
+            />
+            Procesar con Traslape
+          </label>
+        </div>
+        <div>
+          {" "}
+          <button className="btn-primary" type="submit">Subir y Procesar</button>
+        </div>
+        {loading && ( <div>
+          <span className="msg-warring">NOTA: ESTE PROCESO TARDA, POR FAVOR ESPERE.....😩</span>
+        </div>)}
+      
       </form>
       <canvas ref={chartRef} />
       {/* Mostrar las imágenes solo cuando el gráfico esté listo */}
-      {isChartReady ? (
-
+      {isChartReady ? (<>
         <div className="content-imgs">
           {histogramUrl && (
             <>
-            <div>
-              <h2>Histograma de la Imagen</h2>
-              <img src={histogramUrl} alt="Histograma" />
-            </div>
+              {isVisibleOnSubmit && (
+                <>
+                  <div>
+                    <h2>Histograma de la Imagen</h2>
+                    <img src={histogramUrl} alt="Histograma" />
+                  </div>
 
-            <div>
-              <h2>Imagen Binaria</h2>
-              <img src={binaryImgUrl} alt="Imagen Binaria" />
-            </div>
-            <h3>Operaciones Mofologicas</h3>
-            <h3>Operaciones Morfológicas</h3>
-            {morphologicalOperation.map(operation => (
-                <div key={operation.name}>
-                    <h4>{operation.name}</h4>
-                    <img src={`http://localhost:5000/${operation.url}`} alt={operation.name} />
-                </div>
-            ))}
+                  <div>
+                    <h2>Imagen Binaria</h2>
+                    <img src={binaryImgUrl} alt="Imagen Binaria" />
+                  </div>
+                  <h3>Operaciones Mofologicas</h3>
+                  <h3>Operaciones Morfológicas</h3>
+                  {morphologicalOperation.map((operation) => (
+                    <div className="animate__animated animate__fadeInBottomLeft" key={operation.name}>
+                      <h4>{operation.name}</h4>
+                      <img
+                        src={`http://localhost:5000/${operation.url}`}
+                        alt={operation.name}
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
             </>
-        
-            
           )}
-       
-    
         </div>
+       <div className="control-about">
+       <button className="btn-about" onClick={displayNewImages}>Mejoras imagenes</button>
+                  {isVisibleImages && (
+                    <NewImages
+                      isTraslape={conTraslape}
+                      file={selectedFile}
+                    ></NewImages>
+                  )}
+       </div>
+        </>
       ) : (
         <div className="control-carga">Procesando la imagen 🦾 </div>
       )}
