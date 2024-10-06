@@ -21,12 +21,11 @@ const MyChartComponent = () => {
   });
   const [selectedFile, setSelectedFile] = useState(null);
   const [conTraslape, setConTraslape] = useState(false);
-
+  const [numObjects,  setNumObjects] = useState('')
 
   //imgs
   const [binaryImgUrl, setBinaryImgUrl] = useState('');
   const [histogramUrl, setHistogramUrl] = useState("");
-  const [compoundImageUrl, setCompoundImageUrl] = useState("");
   const [morphologicalOperation, setMorphologicalOperations] = useState([])
 
   const [loading, setLoading] = useState(false);
@@ -115,7 +114,7 @@ const MyChartComponent = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedFile) return;
-
+    setMorphologicalOperations([])
     setLoading(true);
     const formData = new FormData();
     formData.append("imagen", selectedFile);
@@ -134,10 +133,8 @@ const MyChartComponent = () => {
       setHistogramUrl(`http://localhost:5000/${response.data.histogram_path}`);
       setBinaryImgUrl(`http://localhost:5000/${response.data.binary_image.image_url}`)
       const {morphological_operations} = response.data;
-      setCompoundImageUrl(
-        `http://localhost:5000/${response.data.compound_image_path}`
-      );
-
+     
+      setNumObjects(response.data.regiones);
       setMorphologicalOperations(prevOperations => [
         ...prevOperations,
         ...morphological_operations.map(morphological => ({
@@ -180,13 +177,10 @@ const MyChartComponent = () => {
         </label>
         <button type="submit">Subir y Procesar</button>
       </form>
-
-      {loading && <div>Cargando... Por favor, espera.</div>}
-
       <canvas ref={chartRef} />
-
       {/* Mostrar las imágenes solo cuando el gráfico esté listo */}
       {isChartReady ? (
+
         <div className="content-imgs">
           {histogramUrl && (
             <>

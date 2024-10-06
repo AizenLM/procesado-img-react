@@ -1,161 +1,29 @@
-from flask import Flask, request, jsonify, send_from_directory 
+from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
-import numpy as np
-import cv2  # Usado para manipular imágenes
-import os
-import matplotlib.pyplot as plt
-from PIL import Image
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
+import os
 import time
+from image_processing import procesar_imagen, save_histogram, procesar_morfologia  # Importar las funciones del archivo separado
 
 # Configuración del servidor Flask con WebSockets
 app = Flask(__name__)
-CORS(app, resources={r"/procesar_imagen": {"origins": "*"}})  # Configuración de CORS
+CORS(app, resources={r"/procesar_imagen": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'processed'
+UPLOAD_FOLDER2 = 'uploads-m'
+PROCESSED_FOLDER2 = 'processed-m'
 
 # Crear directorios si no existen
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
-
-def procesar_morfologia(imagen_binaria, filename):
-    # Definir el kernel para las operaciones morfológicas
-    kernel = np.ones((5, 5), np.uint8)
-
-    # Apertura morfológica (eliminar ruido)
-    apertura = cv2.morphologyEx(imagen_binaria, cv2.MORPH_OPEN, kernel)
-    apertura_path = os.path.join(PROCESSED_FOLDER, f'opened_{filename}.png')
-    cv2.imwrite(apertura_path, apertura * 255)  # Guardar la imagen
-
-    # Cierre morfológico (cerrar pequeñas aperturas)
-    cierre = cv2.morphologyEx(imagen_binaria, cv2.MORPH_CLOSE, kernel)
-    cierre_path = os.path.join(PROCESSED_FOLDER, f'closed_{filename}.png')
-    cv2.imwrite(cierre_path, cierre * 255)  # Guardar la imagen
-
-    # Etiquetado de las regiones conectadas
-    num_labels, labels_im = cv2.connectedComponents(imagen_binaria)
-    labeled_path = os.path.join(PROCESSED_FOLDER, f'labeled_{filename}.png')
-    labels_normalized = (labels_im / num_labels) * 255
-    cv2.imwrite(labeled_path, labels_normalized.astype(np.uint8))  # Guardar la imagen
-
-    return apertura_path, cierre_path, labeled_path
-# Función para detectar regiones usando conectividad de 4 vecinos
-def detectar_regiones(imagen):
-    filas, columnas = imagen.shape
-    visitado = np.zeros((filas, columnas), dtype=bool)
-    regiones = []
-
-    def expandir_region(x, y):
-        pila = [(x, y)]
-        region_actual = []
-        vecinos = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        
-        while pila:
-            px, py = pila.pop()
-            if visitado[px, py] or imagen[px, py] == 0:
-                continue
-            visitado[px, py] = True
-            region_actual.append((px, py))
-            for dx, dy in vecinos:
-                nx, ny = px + dx, py + dy
-                if 0 <= nx < filas and 0 <= ny < columnas and not visitado[nx, ny] and imagen[nx, ny] == 1:
-                    pila.append((nx, ny))
-        return region_actual
-
-    for i in range(filas):
-        for j in range(columnas):
-            if not visitado[i, j] and imagen[i, j] == 1:
-                region = expandir_region(i, j)
-                regiones.append(region)
-    
-    return regiones
-
-# Función para procesar la imagen en 3 cuadrantes (quadnits)
-def procesar_3_cuadrantes(imagen):
-    filas, columnas = imagen.shape
-    cuadrantes = [
-        (0, 0, filas // 2, columnas // 2),          
-        (0, columnas // 2, filas // 2, columnas),   
-        (filas // 2, 0, filas, columnas // 2)       
-    ]
-    
-    regiones_cuadrantes = []
-    for (x1, y1, x2, y2) in cuadrantes:
-        subimagen = imagen[x1:x2, y1:y2]
-        regiones = detectar_regiones(subimagen)
-        regiones_cuadrantes.append(regiones)
-    return regiones_cuadrantes
-
-# Función para procesar la imagen con traslape
-def procesar_cuadrantes_con_traslape(imagen, margen_traslape=10):
-    filas, columnas = imagen.shape
-    cuadrantes = [
-        (0, 0, filas // 2 + margen_traslape, columnas // 2 + margen_traslape),
-        (0, columnas // 2 - margen_traslape, filas // 2 + margen_traslape, columnas),
-        (filas // 2 - margen_traslape, 0, filas, columnas // 2 + margen_traslape)
-    ]
-    
-    regiones_cuadrantes = []
-    for (x1, y1, x2, y2) in cuadrantes:
-        subimagen = imagen[x1:x2, y1:y2]
-        regiones = detectar_regiones(subimagen)
-        regiones_cuadrantes.append(regiones)
-    return regiones_cuadrantes
-
-# Función para procesar la imagen con o sin traslape
-def procesar_imagen(imagen, con_traslape=False):
-    if con_traslape:
-        return procesar_cuadrantes_con_traslape(imagen)
-    else:
-        return procesar_3_cuadrantes(imagen)
-
-# Función para guardar histograma
-def save_histogram(image, filename):
-    # Crear histograma y guardarlo
-    plt.hist(image.ravel(), bins=256, range=[0, 256])
-    plt.title('Histograma')
-    plt.xlabel('Intensidad de píxeles')
-    plt.ylabel('Frecuencia')
-    histogram_path = os.path.join(PROCESSED_FOLDER, f'histogram_{filename}.png')
-    plt.savefig(histogram_path)
-    plt.close()  # Cerrar la figura para evitar conflictos de memoria
-    return histogram_path
-
-# Función para crear imagen compuesta de quadbits
-def create_compound_image(image, overlap):
-    height, width = image.shape
-    step = 2 if not overlap else 1
-    quadbit_size = 2
-    
-    # Determinar las dimensiones de la imagen compuesta
-    num_rows = (height - quadbit_size) // step + 1
-    num_cols = (width - quadbit_size) // step + 1
-    compound_image = np.zeros((num_rows * quadbit_size, num_cols * quadbit_size), dtype=np.uint8)
-
-    for i in range(0, height, step):
-        for j in range(0, width, step):
-            quadbit = image[i:i + quadbit_size, j:j + quadbit_size]
-            if quadbit.shape[0] == 2 and quadbit.shape[1] == 2:
-                # Colocar el quadbit en la imagen compuesta
-                compound_image[i // step * quadbit_size: (i // step + 1) * quadbit_size,
-                               j // step * quadbit_size: (j // step + 1) * quadbit_size] = quadbit * 255
-
-    # Guardar la imagen compuesta
-    compound_image_path = os.path.join(PROCESSED_FOLDER, 'compound_quadbits.png')
-    Image.fromarray(compound_image).save(compound_image_path)
-    return compound_image_path
-#funcion para mostra imagen coloreada
-
-
 # Ruta para subir y procesar la imagen
 @app.route('/procesar_imagen', methods=['POST'])
 def procesar_imagen_endpoint():
     try:
-        # Verificar si el archivo de imagen está presente
         if 'imagen' not in request.files:
             return jsonify({"error": "No se encontró la imagen en la solicitud"}), 400
         
@@ -168,57 +36,43 @@ def procesar_imagen_endpoint():
         file.save(filepath)
         print(f"Archivo guardado en: {filepath}")
 
-        # Leer la imagen en escala de grises y binarizarla
-        imagen = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
-        if imagen is None:
-            print("Error: la imagen no se pudo leer.")
-            return jsonify({"error": "La imagen no se pudo leer."}), 400
-
-        # Binarización de la imagen
-        _, imagen_binaria = cv2.threshold(imagen, 128, 1, cv2.THRESH_BINARY)
-        binary_path = os.path.join(PROCESSED_FOLDER, f'binary_{filename}.png')
-        cv2.imwrite(binary_path, imagen_binaria * 255)  # Guardar imagen binarizada
-
-        # Procesar la imagen (con o sin traslape) para obtener las regiones
-        regiones = procesar_imagen(imagen_binaria, con_traslape)
-        print(f"Regiones procesadas: {len(regiones)}")
+        # Procesar la imagen
+        regiones, binary_path = procesar_imagen(filepath, filename, con_traslape)
 
         # Guardar histograma de la imagen
-        histogram_path = save_histogram(imagen, filename)
+        histogram_path = save_histogram(filepath, filename)
         print(f"Histograma guardado en: {histogram_path}")
 
-        # Realizar operaciones morfológicas y etiquetado
-        apertura_path, cierre_path, labeled_path = procesar_morfologia(imagen_binaria, filename)
+        # Realizar operaciones morfológicas
+        apertura_path, cierre_path, labeled_path = procesar_morfologia(filepath, filename)
 
         return jsonify({
             "regiones": regiones,
             "file_path": filepath,
-            "histogram_path": f'/processed/histogram_{filename}.png',
+            "histogram_path": histogram_path,
             "binary_image": {
                 "name": "Imagen binarizada",
-                "image_url": f'/processed/binary_{filename}.png',
+                "image_url": binary_path,
                 "class": 'img'
             },
             "morphological_operations": [
                 {
                     "name": "Apertura morfológica",
-                    "image_url": f'/processed/opened_{filename}.png',
+                    "image_url": apertura_path,
                     "class": 'img'
                 },
                 {
-                    "name": "Cierre morfológico",
-                    "image_url": f'/processed/closed_{filename}.png',
+                    "name": "Cierre morfológica",
+                    "image_url": cierre_path,
                     "class": 'img'
                 },
                 {
                     "name": "Imagen etiquetada",
-                    "image_url": f'/processed/labeled_{filename}.png',
+                    "image_url": labeled_path,
                     "class": 'img'
                 }
-            ],
-            "compound_image_path": '/processed/compound_quadbits.png'  # URL corregida
+            ]
         })
-
     except Exception as e:
         print(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -234,16 +88,18 @@ def procesar_y_graficar(data):
     file_path = data['file_path']
     con_traslape = data['con_traslape']
 
-    # Leer la imagen en escala de grises y binarizarla
-    imagen = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-    _, imagen_binaria = cv2.threshold(imagen, 128, 1, cv2.THRESH_BINARY)
+    # Asegúrate de que el archivo exista antes de intentar procesarlo
+    if not os.path.exists(file_path):
+        emit('error', {'message': 'El archivo no existe.'})
+        return
 
-    # Enviar datos de las regiones procesadas en tiempo real
+    # Procesar la imagen con la ruta correcta
+    regiones, _ = procesar_imagen(file_path, os.path.basename(file_path), con_traslape)
+
     for frame in range(100):
         time.sleep(0.1)  # Simular procesamiento en tiempo real
-        regiones = procesar_imagen(imagen_binaria, con_traslape)
+        regiones, _ = procesar_imagen(file_path, os.path.basename(file_path), con_traslape)
         emit('nueva_data', {'frame': frame, 'regiones': regiones})
-
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
