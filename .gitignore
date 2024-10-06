@@ -1,0 +1,23 @@
+
+node_modules/
+
+dist/
+build/
+
+.DS_Store
+.idea
+*.suo
+*.ntvs*
+.vscode/
+
+logs/
+
+# Local env files
+.env
+.env.local
+.env.*
+
+# Test results
+coverage/
+
+/public

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detección de Regiones</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        #resultado {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <script src="script.js" defer></script>
+    <h1>Detección de Regiones con Conectividad de 4 Vecinos</h1>
+    
+    <form id="formImagen">
+        <label for="imagen">Cargar imagen:</label><br>
+        <input type="file" id="imagen" name="imagen" accept="image/*" required><br><br>
+        
+        <label for="traslape">¿Procesar con traslape?</label>
+        <input type="checkbox" id="traslape" name="traslape"><br><br>
+
+        <button type="submit">Procesar Imagen</button>
+    </form>
+    
+    <div id="resultado"></div>
+</body>
+</html>
