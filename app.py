@@ -3,16 +3,18 @@ from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from PIL import Image
+import cv2
 import numpy as np
 import os
 import time
 from image_processing import procesar_imagen, save_histogram, procesar_morfologia  # Importar las funciones del archivo separado
 from newImages import save_histogram2, create_compound_image
 from scipy.ndimage import binary_opening, binary_closing, label  # Asegúrate de importar las funciones necesarias
-
+import matplotlib.pyplot as plt
+from io import BytesIO
 # Configuración del servidor Flask con WebSockets
 app = Flask(__name__)
-CORS(app, resources={r"/procesar_imagen": {"origins": "*"},r"/upload": {"origins": "*"} })
+CORS(app, resources={r"/procesar_imagen": {"origins": "*"},r"/upload": {"origins": "*"},r"/espectro": {"origins": "*"} })
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 UPLOAD_FOLDER = 'uploads'
@@ -189,6 +191,57 @@ def upload_image():
 def get_processed_image(filename):
     filepath = os.path.join(PROCESSED_FOLDER2, filename)
     return send_from_directory(PROCESSED_FOLDER2, filename)
+
+@app.route('/espectro', methods=['POST'])
+def procesar_imagen_espectro():
+    if 'image' not in request.files:
+        return jsonify({"error": "No se encontró la imagen"}), 400
+
+    file = request.files['image']
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+
+    # Leer la imagen multiespectral usando OpenCV
+    image = cv2.imread(filepath, cv2.IMREAD_UNCHANGED)
+    
+    if image is None:
+        return jsonify({"error": "No se pudo leer la imagen"}), 400
+
+    # Verificar cuántas bandas tiene la imagen
+    num_bands = image.shape[2] if len(image.shape) == 3 else 1
+    band_images = []
+
+    # Procesar cada banda y guardarla como imagen PNG en memoria
+    for i in range(num_bands):
+        band = image[:, :, i] if num_bands > 1 else image
+        fig, ax = plt.subplots()
+        ax.imshow(band)
+        ax.set_title(f'Banda {i + 1}')
+        ax.axis('off')
+
+        # Guardar cada imagen de banda en un buffer
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        plt.close(fig)
+
+        # Guardar la banda en una carpeta de procesados
+        band_filename = f'band_{i + 1}_{filename}.png'
+        band_image_path = os.path.join(PROCESSED_FOLDER, band_filename)
+        with open(band_image_path, 'wb') as f:
+            f.write(buffer.getvalue())
+
+        band_images.append({
+            "name": f"Banda {i + 1}",
+            "image_url": f"/processed/{band_filename}"
+        })
+
+    return jsonify({
+        "message": "Imagen multiespectral procesada correctamente",
+        "num_bands": num_bands,
+        "band_images": band_images
+    })
 
 
 if __name__ == '__main__':

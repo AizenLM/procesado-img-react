@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale } from 'chart.js';
 import 'chartjs-adapter-date-fns';
@@ -70,7 +70,7 @@ const ETFChart = () => {
   };
 
   useEffect(() => {
-    const intervalId = setInterval(updateChart, 60000);
+    const intervalId = setInterval(updateChart, 60000); // Actualización cada 60 segundos
     updateChart(); // Llamada inicial
 
     return () => clearInterval(intervalId);
@@ -114,7 +114,23 @@ const ETFChart = () => {
             data={chartData}
             options={{
               scales: {
-                x: { type: 'time', time: { unit: 'minute' } },
+                x: { 
+                  type: 'time', 
+                  time: { 
+                    unit: 'minute', // Configura para mostrar tiempo en minutos
+                    tooltipFormat: 'PPpp', // Formato de la herramienta flotante para mostrar la fecha y hora
+                  },
+                  title: {
+                    display: true,
+                    text: 'Time',
+                  },
+                },
+                y: {
+                  title: {
+                    display: true,
+                    text: 'Price (USD)',
+                  },
+                },
               },
             }}
           />

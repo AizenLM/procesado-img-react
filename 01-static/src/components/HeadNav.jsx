@@ -14,7 +14,7 @@ const HeadNav = () => {
                     <Link to='/graf-etf'>Graficar ETF</Link>
                 </li>
                 <li>
-                    <Link to='/about'>MultiEspectral</Link>
+                    <Link to='/espectro'>MultiEspectral</Link>
                 </li>
                 <li>
                     <Link to='/about'>About</Link>
