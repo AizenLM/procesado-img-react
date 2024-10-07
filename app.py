@@ -190,5 +190,6 @@ def get_processed_image(filename):
     filepath = os.path.join(PROCESSED_FOLDER2, filename)
     return send_from_directory(PROCESSED_FOLDER2, filename)
 
+
 if __name__ == '__main__':
     socketio.run(app, debug=True)

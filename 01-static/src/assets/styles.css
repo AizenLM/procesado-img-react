@@ -33,7 +33,15 @@ nav div ul{
 }
 nav div li {
     list-style: none;
+    
+}
+a{
     opacity: .65;
+    color: white;
+}
+a:hover{
+    opacity: 1;
+    transition: 300ms;
 }
 .content{
     margin: auto;
@@ -142,3 +150,4 @@ button{
  footer div{
     color: white;
  }
+ 

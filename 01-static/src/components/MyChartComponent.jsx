@@ -197,9 +197,9 @@ const MyChartComponent = () => {
       </form>
       <canvas ref={chartRef} />
       {/* Mostrar las imágenes solo cuando el gráfico esté listo */}
-      {isChartReady ? (<>
+      {isChartReady && !loading ? (<>
         <div className="content-imgs">
-          {histogramUrl && (
+          {histogramUrl  && (
             <>
               {isVisibleOnSubmit && (
                 <>
