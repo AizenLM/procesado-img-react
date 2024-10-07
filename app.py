@@ -212,6 +212,30 @@ def procesar_imagen_espectro():
     num_bands = image.shape[2] if len(image.shape) == 3 else 1
     band_images = []
 
+    # Procesar la imagen original y guardarla como imagen PNG
+    fig, ax = plt.subplots()
+    ax.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))  # Convertir BGR a RGB
+    ax.set_title('Imagen Original')
+    ax.axis('off')
+
+    # Guardar la imagen original en un buffer
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    plt.close(fig)
+
+    # Guardar la imagen original en la carpeta de procesados
+    original_filename = f'original_{filename}'
+    original_image_path = os.path.join(PROCESSED_FOLDER, original_filename)
+    with open(original_image_path, 'wb') as f:
+        f.write(buffer.getvalue())
+
+    # Agregar la imagen original a la lista de imágenes
+    band_images.append({
+        "name": "Imagen Original",
+        "image_url": f"/processed/{original_filename}"
+    })
+
     # Procesar cada banda y guardarla como imagen PNG en memoria
     for i in range(num_bands):
         band = image[:, :, i] if num_bands > 1 else image
@@ -242,7 +266,6 @@ def procesar_imagen_espectro():
         "num_bands": num_bands,
         "band_images": band_images
     })
-
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)

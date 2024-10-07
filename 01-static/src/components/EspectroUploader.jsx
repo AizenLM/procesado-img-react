@@ -4,6 +4,7 @@ import axios from 'axios';
 const EspectroUploader = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [bandImages, setBandImages] = useState([]);
+  const [originalImage, setOriginalImage] = useState(null); // Nuevo estado para la imagen original
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,6 +23,7 @@ const EspectroUploader = () => {
 
     setLoading(true);
     setBandImages([]);
+    setOriginalImage(null); // Reiniciar imagen original
     setError('');
 
     const formData = new FormData();
@@ -36,6 +38,10 @@ const EspectroUploader = () => {
 
       const { band_images } = response.data;
       setBandImages(band_images);
+
+      // Establecer la imagen original
+      const originalImageUrl = `http://localhost:5000${band_images[0].image_url}`; // Suponiendo que la imagen original está en la primera posición
+      setOriginalImage(originalImageUrl);
     } catch (err) {
       setError('Ocurrió un error al procesar la imagen.');
       console.error(err);
@@ -56,6 +62,17 @@ const EspectroUploader = () => {
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
       <div>
+        {originalImage && ( // Mostrar la imagen original
+          <div style={{ margin: '20px 0' }}>
+            <h2>Imagen Original:</h2>
+            <img
+              src={originalImage}
+              alt="Imagen Original"
+              style={{ width: '200px', height: '200px', objectFit: 'cover' }}
+            />
+          </div>
+        )}
+        
         {bandImages.length > 0 && (
           <div>
             <h2>Bandas Procesadas:</h2>
